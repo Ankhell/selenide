@@ -32,7 +32,7 @@ public class ErrorMessages {
                             @Nullable WebElement element,
                             @Nullable CheckResult lastCheckResult) {
     if (lastCheckResult != null) {
-      return String.format("%nActual value: %s", lastCheckResult.actualValue);
+      return String.format("%nActual value: %s", lastCheckResult.actualValue());
     }
 
     // Deprecated branch for custom condition (not migrated to CheckResult):

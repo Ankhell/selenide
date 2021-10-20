@@ -102,7 +102,7 @@ public abstract class WebElementSource {
       element = getWebElement();
       checkResult = check.check(driver(), element);
 
-      if (checkResult.verdict == ACCEPT) {
+      if (checkResult.verdict() == ACCEPT) {
         return element;
       }
     }
