@@ -21,6 +21,9 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 
+import static org.openqa.selenium.remote.CapabilityType.*;
+import static org.openqa.selenium.remote.CapabilityType.SUPPORTS_ALERTS;
+
 @ParametersAreNonnullByDefault
 public class ChromeDriverFactory extends AbstractChromiumDriverFactory {
   private static final Logger log = LoggerFactory.getLogger(ChromeDriverFactory.class);
@@ -53,20 +56,19 @@ public class ChromeDriverFactory extends AbstractChromiumDriverFactory {
   @Nonnull
   public MutableCapabilities createCapabilities(Config config, Browser browser,
                                                 @Nullable Proxy proxy, @Nullable File browserDownloadsFolder) {
-    Capabilities commonCapabilities = createCommonCapabilities(config, browser, proxy);
+    ChromeOptions chromeOptions = createCommonCapabilities(config, browser, proxy);
 
-    ChromeOptions options = new ChromeOptions();
-    options.setHeadless(config.headless());
+    chromeOptions.setHeadless(config.headless());
     if (!config.browserBinary().isEmpty()) {
       log.info("Using browser binary: {}", config.browserBinary());
-      options.setBinary(config.browserBinary());
+      chromeOptions.setBinary(config.browserBinary());
     }
-    options.addArguments(createChromeArguments(config, browser));
-    options.setExperimentalOption("excludeSwitches", excludeSwitches(commonCapabilities));
-    options.setExperimentalOption("prefs", prefs(browserDownloadsFolder, System.getProperty("chromeoptions.prefs", "")));
-    setMobileEmulation(options);
+    chromeOptions.addArguments(createChromeArguments(config, browser));
+    chromeOptions.setExperimentalOption("excludeSwitches", excludeSwitches(chromeOptions));
+    chromeOptions.setExperimentalOption("prefs", prefs(chromeOptions, browserDownloadsFolder, System.getProperty("chromeoptions.prefs", "")));
+    setMobileEmulation(chromeOptions);
 
-    return options.merge(commonCapabilities);
+    return chromeOptions;
   }
 
   @CheckReturnValue
@@ -103,5 +105,53 @@ public class ChromeDriverFactory extends AbstractChromiumDriverFactory {
   protected Map<String, Object> mobileEmulation() {
     String mobileEmulation = System.getProperty("chromeoptions.mobileEmulation", "");
     return parsePreferencesFromString(mobileEmulation);
+  }
+
+  @Nonnull
+  @Override
+  protected ChromeOptions createCommonCapabilities(
+    Config config, Browser browser, @Nullable Proxy proxy
+  ) {
+    ChromeOptions chromeOptions;
+    if (config.browserCapabilities() instanceof ChromeOptions) {
+      chromeOptions = (ChromeOptions)config.browserCapabilities();
+    } else {
+      chromeOptions = new ChromeOptions();
+    }
+    if (proxy != null) {
+      chromeOptions.setCapability(PROXY, proxy);
+    }
+    if (config.browserVersion() != null && !config.browserVersion().isEmpty()) {
+      chromeOptions.setCapability(BROWSER_VERSION, config.browserVersion());
+    }
+    chromeOptions.setCapability(PAGE_LOAD_STRATEGY, config.pageLoadStrategy());
+    chromeOptions.setCapability(ACCEPT_SSL_CERTS, true);
+
+    if (browser.supportsInsecureCerts()) {
+      chromeOptions.setCapability(ACCEPT_INSECURE_CERTS, true);
+    }
+    chromeOptions.setCapability(SUPPORTS_JAVASCRIPT, true);
+    chromeOptions.setCapability(TAKES_SCREENSHOT, true);
+    chromeOptions.setCapability(SUPPORTS_ALERTS, true);
+
+    transferCapabilitiesFromSystemProperties(chromeOptions);
+
+    if (config.browserCapabilities() instanceof ChromeOptions) {
+      return chromeOptions;
+    } else {
+      return chromeOptions.merge(config.browserCapabilities());
+    }
+  }
+
+  protected void transferCapabilitiesFromSystemProperties(ChromeOptions currentBrowserCapabilities) {
+    String prefix = "capabilities.";
+    for (String key : System.getProperties().stringPropertyNames()) {
+      if (key.startsWith(prefix)) {
+        String capability = key.substring(prefix.length());
+        String value = System.getProperties().getProperty(key);
+        log.debug("Use {}={}", key, value);
+        currentBrowserCapabilities.setCapability(capability, convertStringToNearestObjectType(value));
+      }
+    }
   }
 }

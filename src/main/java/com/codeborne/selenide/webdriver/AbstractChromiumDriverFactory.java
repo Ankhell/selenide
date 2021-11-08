@@ -1,6 +1,8 @@
 package com.codeborne.selenide.webdriver;
 
 import com.codeborne.selenide.Config;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.chromium.ChromiumOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,6 +11,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -58,6 +61,32 @@ public abstract class AbstractChromiumDriverFactory extends AbstractDriverFactor
     }
     preferences.putAll(parsePreferencesFromString(externalPreferences));
 
+    log.debug("Using chromium preferences: {}", preferences);
+    return preferences;
+  }
+
+  @Nonnull
+  @CheckReturnValue
+  protected Map<String, Object> prefs(
+    ChromeOptions chromeOptions,
+    @Nullable File browserDownloadsFolder,
+    String externalPreferences
+  ) {
+    Map<String, Object> preferences = prefs(browserDownloadsFolder, externalPreferences);
+    try {
+      final Field experimentalOptionsField = ChromiumOptions.class.getDeclaredField("experimentalOptions");
+      experimentalOptionsField.setAccessible(true);
+      final Object experimentalOptions = experimentalOptionsField.get(chromeOptions);
+      experimentalOptionsField.setAccessible(false);
+      if (experimentalOptions instanceof Map) {
+        Map experimentalOptionsMap = (Map) experimentalOptions;
+        if (experimentalOptionsMap.get("prefs") instanceof Map) {
+          Map prefsMap = (Map) experimentalOptionsMap.get("prefs");
+          preferences.putAll(prefsMap);
+        }
+      }
+    } catch (NoSuchFieldException | IllegalAccessException ignored) {
+    }
     log.debug("Using chromium preferences: {}", preferences);
     return preferences;
   }
@@ -121,12 +150,13 @@ public abstract class AbstractChromiumDriverFactory extends AbstractDriverFactor
   @Nonnull
   private List<String> parseArguments(String arguments) {
     return parseCSV(arguments).stream()
-      .map(this::removeQuotes)
-      .collect(toList());
+                              .map(this::removeQuotes)
+                              .collect(toList());
   }
 
   /**
    * parse parameters which can come from command-line interface
+   *
    * @param csvString comma-separated values, quotes can be used to mask spaces and commas
    *                  Example: 123,"foo bar","bar,foo"
    * @return values as array, quotes are preserved
